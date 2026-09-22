@@ -1,0 +1,49 @@
+name: alert-watch
+
+on:
+  schedule:
+    # 每 30 分钟检查一次预警（GitHub schedule 已激活；免费账户 public 仓库可用）
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}   # 支持手动触发
+
+permissions:
+  contents: write          # 需要把 .alert_state.json 提交回仓库做状态持久化
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 预警监控与推送
+        env:
+          # 数据源凭据
+          QW_HOST: ${{ secrets.QW_HOST }}
+          QW_KEY: ${{ secrets.QW_KEY }}
+          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
+          # 位置（不写入源码，避免 public 仓库泄露住址）
+          WEATHER_LAT: ${{ secrets.WEATHER_LAT }}
+          WEATHER_LON: ${{ secrets.WEATHER_LON }}
+          WEATHER_ADCODE: ${{ secrets.WEATHER_ADCODE }}
+          WEATHER_KEYWORD: ${{ secrets.WEATHER_KEYWORD }}
+          # 静默模式：不打印预警明细，避免日志泄露位置
+          WEATHER_QUIET: "1"
+          # 云端主通道：群机器人 webhook（不校验企业可信IP）
+          WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
+          # 自建应用凭据（云端会因「企业可信IP」返回 60020，仅在白名单IP环境生效）
+          WECOM_CORPID: ${{ secrets.WECOM_CORPID }}
+          WECOM_APP_SECRET: ${{ secrets.WECOM_APP_SECRET }}
+          WECOM_AGENTID: ${{ secrets.WECOM_AGENTID }}
+          WECOM_TOUSER: ${{ secrets.WECOM_TOUSER }}
+        run: |
+          python alert_watch.py
+          # 仅当状态文件有变化时才提交（避免刷屏 commit）
+          if git status --porcelain | grep -q "alert_state.json"; then
+            git config user.name "weather-bot"
+            git config user.email "weather-bot@users.noreply.github.com"
+            git add .alert_state.json
+            git commit -m "chore: update alert state [skip ci]"
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
+          fi
