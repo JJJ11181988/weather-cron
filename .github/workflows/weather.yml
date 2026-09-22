@@ -1,0 +1,40 @@
+name: weather-notify
+
+on:
+  schedule:
+    # 北京时间 06:00 = UTC 22:00
+    - cron: "0 22 * * *"
+  workflow_dispatch: {}   # 支持手动触发
+
+permissions:
+  contents: read
+
+jobs:
+  weather:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 拉取和风+nmc+WAQI 并推送
+        env:
+          # 数据源凭据
+          QW_HOST: ${{ secrets.QW_HOST }}
+          QW_KEY: ${{ secrets.QW_KEY }}
+          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
+          # 位置（不写入源码，避免 public 仓库泄露住址）
+          WEATHER_LAT: ${{ secrets.WEATHER_LAT }}
+          WEATHER_LON: ${{ secrets.WEATHER_LON }}
+          WEATHER_ADCODE: ${{ secrets.WEATHER_ADCODE }}
+          WEATHER_KEYWORD: ${{ secrets.WEATHER_KEYWORD }}
+          # 静默模式：不打印天气明细，避免日志泄露位置
+          WEATHER_QUIET: "1"
+          # 云端主通道：群机器人 webhook（不校验企业可信IP）
+          WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
+          # 自建应用凭据（云端会因「企业可信IP」返回 60020，仅在白名单IP环境生效）
+          WECOM_CORPID: ${{ secrets.WECOM_CORPID }}
+          WECOM_APP_SECRET: ${{ secrets.WECOM_APP_SECRET }}
+          WECOM_AGENTID: ${{ secrets.WECOM_AGENTID }}
+          WECOM_TOUSER: ${{ secrets.WECOM_TOUSER }}
+        run: python notify_weather.py
